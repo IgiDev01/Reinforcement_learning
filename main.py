@@ -1,5 +1,6 @@
 import random
 import time 
+from collections import deque
 class Environment:
     def __init__(self,x,y) -> None:
         self.states = []
@@ -54,8 +55,13 @@ class Agent:
             self.state = [random.randint(0,x-1), random.randint(0,y-1)]
 
     def start_q_table(self):
-        key = ((self.state[0], self.state[1]),(self.apple[0], self.apple[1]))
-        self.q_table[key]=[0,0,0,0]
+        
+        #vector implementation
+        key = ((self.apple[0]-self.state[0]),(self.apple[1]-self.state[1]))
+
+
+        #key = ((self.state[0], self.state[1]),(self.apple[0], self.apple[1]))
+        self.q_table[key]=[0.0,0.0,0.0,0.0]
 
     def q_table_display(self):
         for key, values in self.q_table:
@@ -66,7 +72,11 @@ class Agent:
         action = [[1,0],[-1,0],[0,1],[0,-1]]
         values = []
         for row in action:
-            key = ((self.state[0]+row[0], self.state[1]+row[1]),(self.apple[0], self.apple[1]))
+
+            #vector implementation
+            key = ((self.apple[0]-self.state[0]+row[0]),(self.apple[1]-self.state[1]+row[1]))
+
+            #key = ((self.state[0]+row[0], self.state[1]+row[1]),(self.apple[0], self.apple[1]))
             if key not in self.q_table:
                 self.q_table[key]=[0.0,0.0,0.0,0.0]
             values.append(max(self.q_table[key]))
@@ -84,14 +94,22 @@ class Agent:
         for i, x in enumerate(actions):
             if x == action:
                 index = i
-        key1 = ((self.state[0], self.state[1]),(self.apple[0], self.apple[1]))
-        key2 = ((self.state[0]+action[0], self.state[1]+action[1]),(self.apple[0], self.apple[1]))
-        self.q_table[key1][index]+= alpha * (reward+gamma*max(self.q_table[key2])-self.q_table[key1][index])
 
+        #vector implementation
+        key1 = ((self.apple[0]-self.state[0]),(self.apple[1]-self.state[1]))
+        key2 = ((self.apple[0]-(self.state[0]+action[0])),(self.apple[1]-(self.state[1]+action[1])))
+
+        #key1 = ((self.state[0], self.state[1]),(self.apple[0], self.apple[1]))
+        #key2 = ((self.state[0]+action[0], self.state[1]+action[1]),(self.apple[0], self.apple[1]))
+        #self.q_table[key1][index]+= alpha * (reward+gamma*max(self.q_table[key2])-self.q_table[key1][index])
+        self.q_table[key1][index] += alpha*(reward+gamma*max(self.q_table[key2])-self.q_table[key1][index])
 
         self.state=next_state
-        if(done==1) :
-            self.done=1
+        self.done=done
+        if reward == 1:
+            self.state = deque(self.state)
+            self.state.appendleft()
+            
 
 board_size_x = 3
 board_size_y = 3
@@ -132,7 +150,7 @@ def display_board(board):
 
 
 
-epizodes = 500000
+epizodes = 100000
 n = 0
 for i in range(epizodes):
     environment.reset()
@@ -153,15 +171,11 @@ for i in range(epizodes):
         action = agent.get_action()
         next_state, reward, done = environment.step(action, agent.state)
         agent.update(action, next_state, reward, done)
-        board[agent.state[1]+1][agent.state[0]+1]="*"
-        if n >epizodes-10:
-            time.sleep(0.2)
-            display_board(board)
-            print(n)    
-        
+        board[agent.state[1]+1][agent.state[0]+1]="*"  
     agent.done=0
     n+=1
 for key, values in dict(sorted(agent.q_table.items())).items():
     print(key, values)
+
 
 
