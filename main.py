@@ -1,14 +1,17 @@
 import random
 import time 
 from collections import deque
+import copy
+import pickle
 class Environment:
     def __init__(self,x,y) -> None:
         self.states = []
         self.x = x
         self.y = y
+        self.apple = 0
         pass
     
-    def reset(self):
+    def reset(self, state):
         column = []
         for i in range(self.y):
             row = []
@@ -16,32 +19,37 @@ class Environment:
                 row.append(0)
             column.append(row)
         self.states = column
-        self.states[random.randint(0,self.y-1)][random.randint(0,self.x-1)]=1
+        
+        self.apple = [random.randint(0,self.x-1),random.randint(0,self.y-1)]
+        while(self.apple in state):
+            self.apple = [random.randint(0,self.y-1),random.randint(0,self.x-1)]
+
+        self.states[self.apple[1]][self.apple[0]]=1
         
 
     def step(self, action, state):   #next_state, reward, done
-        new_state = []
-        if state[0]+action[0] < 0 or state[0]+action[0] > self.x-1 or state[1]+action[1] < 0 or state[1]+action[1] > self.y-1:
-            new_state.append(state[0]+action[0])
-            new_state.append(state[1]+action[1])
-            return new_state,-1,1 
-        if self.states[state[1]+action[1]][state[0]+action[0]]==1:
-            new_state.append(state[0]+action[0])
-            new_state.append(state[1]+action[1])
-            return new_state,1,1
+
+        new_state = [state[0][0]+action[0], state[0][1]+action[1]]
+        segments = state[1:]
+        if len(state) == self.x * self.y:
+            # print("DONE!!!")
+            return [state[0][0], state[0][1]],1,1
+        if new_state in segments:
+            return new_state,-1, 1
+        if state[0][0]+action[0] < 0 or state[0][0]+action[0] > self.x-1 or state[0][1]+action[1] < 0 or state[0][1]+action[1] > self.y-1:
+             return new_state,-1,1 
+        if self.states[state[0][1]+action[1]][state[0][0]+action[0]]==1:
+             return new_state,1,0
         else:
-            
-            new_state.append(state[0]+action[0])
-            new_state.append(state[1]+action[1])
-            return new_state,0,0
+             return new_state,0,0
         
 
 
 
 
 class Agent:
-    def __init__(self, x, y) -> None:
-        self.state = []
+    def __init__(self) -> None:
+        self.state = 0
         self.q_table = {}
         self.done = 0
         self.apple = []
@@ -49,42 +57,45 @@ class Agent:
     
     def set_apple(self, x,y):
         self.apple = [x,y]
-    def set_agent(self, x, y):
-        self.state = self.apple
-        while self.state[0] == self.apple[0] and self.state[1] == self.apple[1]: 
-            self.state = [random.randint(0,x-1), random.randint(0,y-1)]
-
-    def start_q_table(self):
         
-        #vector implementation
-        key = ((self.apple[0]-self.state[0]),(self.apple[1]-self.state[1]))
-
-
-        #key = ((self.state[0], self.state[1]),(self.apple[0], self.apple[1]))
-        self.q_table[key]=[0.0,0.0,0.0,0.0]
-
     def q_table_display(self):
-        for key, values in self.q_table:
+        for key, values in self.q_table.items():
             print(key, values)
-
-
+    def set_agent(self,board_x, board_y):
+        self.state = [[random.randint(0,board_x-1), random.randint(0,board_y-1)]]
+        self.done = 0
+    def get_best_action(self, values):
+        # print(values)
+        for x in values:
+            same = 0
+            for i in range(len(values)):
+                if x == values[i]:
+                    same +=1
+            if same > 1:
+                ret =  random.randint(0,3)
+                
+                return ret
+            same = 0
+        biggest = max(values)
+        return values.index(biggest)
     def get_action(self):
         action = [[1,0],[-1,0],[0,1],[0,-1]]
         values = []
-        for row in action:
-
-            #vector implementation
-            key = ((self.apple[0]-self.state[0]+row[0]),(self.apple[1]-self.state[1]+row[1]))
-
-            #key = ((self.state[0]+row[0], self.state[1]+row[1]),(self.apple[0], self.apple[1]))
+        key1 = copy.deepcopy(self.state)
+        for i in range(len(key1)):
+            key1[i]=[self.apple[0]-self.state[i][0], self.apple[1]-self.state[i][1]]
+        key1 = tuple(map(tuple,key1))
+        if key1 not in self.q_table:
+            self.q_table[key1]=[0.0,0.0,0.0,0.0]
+        for row in action:   
+            key = copy.deepcopy(self.state)
+            for i in range(len(key1)):
+                key[i]=[self.apple[0]-(self.state[i][0]+row[0]), self.apple[1]-(self.state[i][1]+row[1])]
+            key = tuple(map(tuple,key))
             if key not in self.q_table:
                 self.q_table[key]=[0.0,0.0,0.0,0.0]
-            values.append(max(self.q_table[key]))
-        
-        if (x == values[0] for x in values):
-            return action[random.randint(0,3)]
-        else:
-            return action[values.index(max(values))]
+        # print(key1)
+        return action[self.get_best_action(self.q_table[key1])]
     
     def update(self, action, next_state, reward, done):   #aktualizacja q_table
         gamma = 0.9
@@ -95,29 +106,29 @@ class Agent:
             if x == action:
                 index = i
 
-        #vector implementation
-        key1 = ((self.apple[0]-self.state[0]),(self.apple[1]-self.state[1]))
-        key2 = ((self.apple[0]-(self.state[0]+action[0])),(self.apple[1]-(self.state[1]+action[1])))
-
-        #key1 = ((self.state[0], self.state[1]),(self.apple[0], self.apple[1]))
-        #key2 = ((self.state[0]+action[0], self.state[1]+action[1]),(self.apple[0], self.apple[1]))
-        #self.q_table[key1][index]+= alpha * (reward+gamma*max(self.q_table[key2])-self.q_table[key1][index])
-        self.q_table[key1][index] += alpha*(reward+gamma*max(self.q_table[key2])-self.q_table[key1][index])
-
-        self.state=next_state
+        key1 = copy.deepcopy(self.state)
+        for i in range(len(key1)):
+            key1[i]=[self.apple[0]-self.state[i][0], self.apple[1]-self.state[i][1]]
+        key2 = copy.deepcopy(self.state)
+        for i in range(len(key2)):
+            key2[i] = [key1[i][0]-action[0], key1[i][1]-action[1]]
+        key1 = tuple(map(tuple, key1))
+        key2 = tuple(map(tuple, key2))
+        r = alpha*(reward+gamma*max(self.q_table[key2])-self.q_table[key1][index])
+        self.q_table[key1][index] += r
+        self.state.insert(0, next_state)
         self.done=done
-        if reward == 1:
-            self.state = deque(self.state)
-            self.state.appendleft()
+        if reward != 1:
+            self.state = self.state[:-1]
             
 
-board_size_x = 3
-board_size_y = 3
+board_size_x = 10
+board_size_y = 10
 
 apple_x = 0
 apple_y = 0
 environment = Environment(board_size_x,board_size_y)
-agent = Agent(board_size_x, board_size_y)
+agent = Agent()
 
 def generate_board(board_size_y, board_size_x):
     board = []
@@ -134,48 +145,58 @@ def generate_board(board_size_y, board_size_x):
         board.append(row)
     return board
 
-def board_update(board):
+
+
+def display_board(board, state, apple):
+
     for i in range(board_size_y+2):
         for j in range(board_size_x+2):
-            if board[i][j]=='*':
+            if board[i][j]=='*' or board[i][j]=='o' or board[i][j]=='@':
                 board[i][j]=' '
+    board[apple[1]+1][apple[0]+1]="@"
+    
+    for row in state:
+        board[row[1]+1][row[0]+1]="*"
+    board[state[0][1]+1][state[0][0]+1]="o"
 
-def display_board(board):
     print("_________")
     for row in board:
         for x in row:
             print(x, end='')
         print()
 
-
-
-
-epizodes = 100000
+epizodes = 10000
 n = 0
-for i in range(epizodes):
-    environment.reset()
-    for i in range(len(environment.states)):
-        for j in range(len(environment.states[i])):
-            if environment.states[i][j]==1:
-                apple_x=j
-                apple_y=i
-    agent.set_apple(apple_x,apple_y)
-    agent.set_agent(board_size_x, board_size_y)
-    board = generate_board(board_size_y,board_size_x)
-    board[apple_y+1][apple_x+1]="x"
-    board[agent.state[1]+1][agent.state[0]+1]="*"
-    #display_board(board)
-    agent.start_q_table()
-    while(agent.done!=1):
-        board_update(board)
-        action = agent.get_action()
-        next_state, reward, done = environment.step(action, agent.state)
-        agent.update(action, next_state, reward, done)
-        board[agent.state[1]+1][agent.state[0]+1]="*"  
-    agent.done=0
-    n+=1
-for key, values in dict(sorted(agent.q_table.items())).items():
-    print(key, values)
+while epizodes > 1:
 
+
+    file_path = "data"+str(board_size_x)+"x"+str(board_size_y)+".txt"
+    # loading already learned data
+    with open(file_path, 'rb') as file:
+        agent.q_table = pickle.load(file)
+
+    for i in range(epizodes):
+        agent.set_agent(board_size_x, board_size_y)
+        environment.reset(agent.state)
+        agent.set_apple(environment.apple[0],environment.apple[1])
+        board = generate_board(board_size_y,board_size_x)
+        # display_board(board, agent.state, agent.apple)
+        while agent.done == 0:
+            action = agent.get_action()
+            next_state, reward, done = environment.step(action, agent.state)
+            agent.update(action, next_state, reward, done)
+            if(reward == 1 and len(agent.state)<board_size_x*board_size_y):
+                environment.reset(agent.state)
+                agent.set_apple(environment.apple[0],environment.apple[1])
+            display_board(board, agent.state, agent.apple)
+            print(agent.state)
+            time.sleep(0.2)
+
+
+    #saving q_table to text file in order to use learned data in next time running program
+    with open(file_path, 'wb') as file:
+        pickle.dump(agent.q_table, file)
+    n=n+epizodes
+    print(n)
 
 
